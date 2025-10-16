@@ -368,9 +368,9 @@ export class InstanceController {
   }
 
   public async fetchInstances({ instanceName, instanceId, number }: InstanceDto, key: string) {
-    const env = this.configService.get<Auth>('AUTHENTICATION')?.API_KEY;
+    const env = this.configService.get<Auth>('AUTHENTICATION').API_KEY;
 
-    if (!env || env.KEY !== key) {
+    if (env.KEY !== key) {
       const instancesByKey = await this.prismaRepository.instance.findMany({
         where: {
           token: key,
