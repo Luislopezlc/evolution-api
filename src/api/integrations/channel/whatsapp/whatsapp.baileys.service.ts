@@ -1077,6 +1077,7 @@ export class BaileysStartupService extends ChannelStartupService {
             this.logger.warn(`Message ignored with messageStubParameters: ${JSON.stringify(received, null, 2)}`);
             continue;
           }
+
           if (received.message?.conversation || received.message?.extendedTextMessage?.text) {
             const text = received.message?.conversation || received.message?.extendedTextMessage?.text;
 
@@ -1092,6 +1093,12 @@ export class BaileysStartupService extends ChannelStartupService {
               const messageId = await this.client.fetchMessageHistory(50, received.key, received.messageTimestamp!);
               console.log('requested on-demand sync, id=', messageId);
             }
+          }
+
+          // Validación temprana: filtrar mensajes Click-to-WhatsApp stub para evitar procesamiento innecesario
+          if (this.isClickToWhatsAppStub(received)) {
+            this.logger.debug(`Mensaje Click-to-WhatsApp stub detectado y omitido: ${received.key.id}`);
+            continue; // Saltar al siguiente mensaje sin procesamiento adicional
           }
 
           const editedMessage =
@@ -4891,5 +4898,75 @@ export class BaileysStartupService extends ChannelStartupService {
         records: formattedMessages,
       },
     };
+  }
+
+  // Set de tipos de mensaje válidos para optimización O(1) lookup
+  private readonly VALID_MESSAGE_TYPES = new Set([
+    'conversation',
+    'extendedTextMessage',
+    'imageMessage',
+    'videoMessage',
+    'stickerMessage',
+    'documentMessage',
+    'documentWithCaptionMessage',
+    'ptvMessage',
+    'audioMessage',
+    'contactMessage',
+    'locationMessage',
+    'listMessage',
+    'buttonsMessage',
+    'templateMessage',
+    'pollCreationMessage',
+    'reactionMessage',
+  ]);
+
+  /**
+   * Detecta si un mensaje es un stub de Click-to-WhatsApp de Meta
+   * Optimizado con validación temprana y Set lookup O(1)
+   */
+  private isClickToWhatsAppStub(message: WAMessage): boolean {
+    // Validación temprana: verificar messageStubParameters primero (más rápido)
+    if (message.messageStubParameters && message.messageStubParameters.length > 0) {
+      return false; // Si tiene parámetros, no es un stub vacío
+    }
+
+    // Verificar si el mensaje tiene contenido real
+    if (!message.message) {
+      this.logger.debug(`Stub detectado: mensaje sin contenido - ${message.key.id}`);
+      return true;
+    }
+
+    // Obtener el tipo de mensaje de forma eficiente
+    const messageType = getContentType(message.message);
+
+    // Validación temprana: si el tipo no es válido, es un stub
+    if (!messageType || !this.VALID_MESSAGE_TYPES.has(messageType)) {
+      this.logger.debug(`Stub detectado: tipo de mensaje inválido '${messageType}' - ${message.key.id}`);
+      return true;
+    }
+
+    // Validaciones específicas por tipo de mensaje
+    const messageContent = message.message[messageType];
+
+    if (messageType === 'extendedTextMessage') {
+      // extendedTextMessage sin texto es un stub
+      if (
+        !messageContent ||
+        (typeof messageContent === 'object' &&
+          (!('text' in messageContent) || !messageContent.text || messageContent.text.trim().length === 0))
+      ) {
+        this.logger.debug(`Stub detectado: extendedTextMessage sin texto - ${message.key.id}`);
+        return true;
+      }
+    } else if (messageType === 'conversation') {
+      // conversation vacía es un stub
+      if (!messageContent || typeof messageContent !== 'string' || messageContent.trim().length === 0) {
+        this.logger.debug(`Stub detectado: conversation vacía - ${message.key.id}`);
+        return true;
+      }
+    }
+
+    // Si llegamos aquí, el mensaje tiene contenido válido
+    return false;
   }
 }
