@@ -35,7 +35,7 @@ async function bootstrap() {
   const app = express();
 
   let providerFiles: ProviderFiles = null;
-  if (configService.get<ProviderSession>('PROVIDER').ENABLED) {
+  if (configService.get<ProviderSession>('PROVIDER')?.ENABLED) {
     providerFiles = new ProviderFiles(configService);
     await providerFiles.onModuleInit();
     logger.info('Provider:Files - ON');
@@ -47,7 +47,11 @@ async function bootstrap() {
   app.use(
     cors({
       origin(requestOrigin, callback) {
-        const { ORIGIN } = configService.get<Cors>('CORS');
+        const corsConfig = configService.get<Cors>('CORS');
+        if (!corsConfig) {
+          return callback(new Error('CORS configuration not found'));
+        }
+        const { ORIGIN } = corsConfig;
         if (ORIGIN.includes('*')) {
           return callback(null, true);
         }
@@ -56,8 +60,8 @@ async function bootstrap() {
         }
         return callback(new Error('Not allowed by CORS'));
       },
-      methods: [...configService.get<Cors>('CORS').METHODS],
-      credentials: configService.get<Cors>('CORS').CREDENTIALS,
+      methods: [...(configService.get<Cors>('CORS')?.METHODS || [])],
+      credentials: configService.get<Cors>('CORS')?.CREDENTIALS || false,
     }),
     urlencoded({ extended: true, limit: '136mb' }),
     json({ limit: '136mb' }),
@@ -77,12 +81,12 @@ async function bootstrap() {
       if (err) {
         const webhook = configService.get<Webhook>('WEBHOOK');
 
-        if (webhook.EVENTS.ERRORS_WEBHOOK && webhook.EVENTS.ERRORS_WEBHOOK != '' && webhook.EVENTS.ERRORS) {
+        if (webhook?.EVENTS?.ERRORS_WEBHOOK && webhook.EVENTS.ERRORS_WEBHOOK != '' && webhook.EVENTS.ERRORS) {
           const tzoffset = new Date().getTimezoneOffset() * 60000; //offset in milliseconds
           const localISOTime = new Date(Date.now() - tzoffset).toISOString();
           const now = localISOTime;
-          const globalApiKey = configService.get<Auth>('AUTHENTICATION').API_KEY.KEY;
-          const serverUrl = configService.get<HttpServer>('SERVER').URL;
+          const globalApiKey = configService.get<Auth>('AUTHENTICATION')?.API_KEY?.KEY;
+          const serverUrl = configService.get<HttpServer>('SERVER')?.URL;
 
           const errorData = {
             event: 'error',

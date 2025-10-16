@@ -8,7 +8,7 @@ import { NextFunction, Request, Response } from 'express';
 const logger = new Logger('GUARD');
 
 async function apikey(req: Request, _: Response, next: NextFunction) {
-  const env = configService.get<Auth>('AUTHENTICATION').API_KEY;
+  const env = configService.get<Auth>('AUTHENTICATION')?.API_KEY;
   const key = req.get('apikey');
   const db = configService.get<Database>('DATABASE');
 
@@ -16,7 +16,7 @@ async function apikey(req: Request, _: Response, next: NextFunction) {
     throw new UnauthorizedException();
   }
 
-  if (env.KEY === key) {
+  if (env && env.KEY === key) {
     return next();
   }
 
