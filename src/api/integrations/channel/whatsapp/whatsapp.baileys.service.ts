@@ -1077,6 +1077,25 @@ export class BaileysStartupService extends ChannelStartupService {
             this.logger.warn(`Message ignored with messageStubParameters: ${JSON.stringify(received, null, 2)}`);
             continue;
           }
+          const msg = received.message;
+          const messageType = msg ? Object.keys(msg)[0] : null;
+          const validMessageTypes = new Set([
+            'conversation',
+            'extendedTextMessage',
+            'imageMessage',
+            'videoMessage',
+            'audioMessage',
+            'documentMessage',
+            'stickerMessage',
+            'locationMessage',
+            'contactMessage',
+          ]);
+
+          if (!messageType || !validMessageTypes.has(messageType)) {
+            console.log(`[Baileys] Tipo de mensaje no soportado: ${messageType}`);
+            continue;
+          }
+
           if (received.message?.conversation || received.message?.extendedTextMessage?.text) {
             const text = received.message?.conversation || received.message?.extendedTextMessage?.text;
 
